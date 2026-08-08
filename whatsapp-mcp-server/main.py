@@ -8,6 +8,9 @@ from mcp.server.fastmcp import FastMCP
 from mcp_config import resolve_host, resolve_port, resolve_transport
 from parent_watchdog import install_stdio_parent_watchdog
 from whatsapp import (
+    delete_message as whatsapp_delete_message,
+)
+from whatsapp import (
     download_media as whatsapp_download_media,
 )
 from whatsapp import (
@@ -51,9 +54,6 @@ from whatsapp import (
 )
 from whatsapp import (
     send_reaction as whatsapp_send_reaction,
-)
-from whatsapp import (
-    delete_message as whatsapp_delete_message,
 )
 
 # Initialize FastMCP server. Env-var handling is deferred to the __main__ block

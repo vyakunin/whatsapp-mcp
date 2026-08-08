@@ -692,23 +692,79 @@ def list_chats(
 # Used to make contact search cross-script: searching "Olga" should match a
 # contact saved in Cyrillic as "Ольга", and vice versa.
 _CYR_TO_LAT = {
-    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e",
-    "ж": "zh", "з": "z", "и": "i", "й": "y", "к": "k", "л": "l", "м": "m",
-    "н": "n", "о": "o", "п": "p", "р": "r", "с": "s", "т": "t", "у": "u",
-    "ф": "f", "х": "kh", "ц": "ts", "ч": "ch", "ш": "sh", "щ": "shch",
-    "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu", "я": "ya",
+    "а": "a",
+    "б": "b",
+    "в": "v",
+    "г": "g",
+    "д": "d",
+    "е": "e",
+    "ё": "e",
+    "ж": "zh",
+    "з": "z",
+    "и": "i",
+    "й": "y",
+    "к": "k",
+    "л": "l",
+    "м": "m",
+    "н": "n",
+    "о": "o",
+    "п": "p",
+    "р": "r",
+    "с": "s",
+    "т": "t",
+    "у": "u",
+    "ф": "f",
+    "х": "kh",
+    "ц": "ts",
+    "ч": "ch",
+    "ш": "sh",
+    "щ": "shch",
+    "ъ": "",
+    "ы": "y",
+    "ь": "",
+    "э": "e",
+    "ю": "yu",
+    "я": "ya",
 }
 # Inverse mapping. Multi-letter Latin sequences come first so "zh" → "ж" is
 # tried before falling back to "z" → "з" + "h" leftover.
 _LAT_TO_CYR_MULTI = [
-    ("shch", "щ"), ("yu", "ю"), ("ya", "я"), ("zh", "ж"),
-    ("kh", "х"), ("ts", "ц"), ("ch", "ч"), ("sh", "ш"),
+    ("shch", "щ"),
+    ("yu", "ю"),
+    ("ya", "я"),
+    ("zh", "ж"),
+    ("kh", "х"),
+    ("ts", "ц"),
+    ("ch", "ч"),
+    ("sh", "ш"),
 ]
 _LAT_TO_CYR_SINGLE = {
-    "a": "а", "b": "б", "c": "к", "d": "д", "e": "е", "f": "ф", "g": "г",
-    "h": "х", "i": "и", "j": "й", "k": "к", "l": "л", "m": "м", "n": "н",
-    "o": "о", "p": "п", "q": "к", "r": "р", "s": "с", "t": "т", "u": "у",
-    "v": "в", "w": "в", "x": "кс", "y": "ы", "z": "з",
+    "a": "а",
+    "b": "б",
+    "c": "к",
+    "d": "д",
+    "e": "е",
+    "f": "ф",
+    "g": "г",
+    "h": "х",
+    "i": "и",
+    "j": "й",
+    "k": "к",
+    "l": "л",
+    "m": "м",
+    "n": "н",
+    "o": "о",
+    "p": "п",
+    "q": "к",
+    "r": "р",
+    "s": "с",
+    "t": "т",
+    "u": "у",
+    "v": "в",
+    "w": "в",
+    "x": "кс",
+    "y": "ы",
+    "z": "з",
 }
 
 
@@ -794,6 +850,14 @@ def _matches(query: str, name: str | None, jid: str) -> bool:
     return False
 
 
+# Cross-script matching requires soft-sign-stripping and transliteration variants
+# that SQL's instr()/LIKE can't express portably, so search_contacts streams rows
+# out and filters in Python. Personal WhatsApp contact stores are small (low
+# thousands at the extreme); this LIMIT only bounds memory if some account has
+# tens of thousands of contacts.
+_CONTACT_SCAN_CAP = 20000
+
+
 def search_contacts(query: str) -> list[dict[str, Any]]:
     """Search contacts by name or phone number.
 
@@ -807,20 +871,13 @@ def search_contacts(query: str) -> list[dict[str, Any]]:
     seen_jids: set[str] = set()
     result: list[dict[str, Any]] = []
 
-    # Cross-script matching requires soft-sign-stripping and transliteration
-    # variants that SQL's instr()/LIKE can't express portably. Personal WA
-    # contact stores are small (low thousands at the extreme), so we stream
-    # rows out and filter in Python. We still cap with LIMIT to bound memory
-    # if some account has tens of thousands of contacts.
-    SCAN_CAP = 20000
-
     # 1) Search messages.db chats table.
     try:
         conn = sqlite3.connect(MESSAGES_DB_PATH)
         cursor = conn.cursor()
         cursor.execute(
             "SELECT jid, name FROM chats WHERE jid NOT LIKE '%@g.us' LIMIT ?",
-            (SCAN_CAP,),
+            (_CONTACT_SCAN_CAP,),
         )
         for jid, name in cursor.fetchall():
             if jid in seen_jids:
@@ -847,7 +904,7 @@ def search_contacts(query: str) -> list[dict[str, Any]]:
                 FROM whatsmeow_contacts
                 LIMIT ?
                 """,
-                (SCAN_CAP,),
+                (_CONTACT_SCAN_CAP,),
             )
             for their_jid, full_name, push_name, first_name, business_name in cursor2.fetchall():
                 if their_jid in seen_jids:
