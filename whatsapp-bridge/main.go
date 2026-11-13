@@ -2744,15 +2744,28 @@ func main() {
 
 			// Print QR code for pairing with phone
 			qrCodeShown := false
+			pairPhone := pairPhoneFromEnv()
 			for evt := range qrChan {
 				if evt.Event == "code" {
-					if !qrCodeShown {
+					if pairPhone != "" && !qrCodeShown {
+						// PairPhone needs the websocket up, which the first QR event proves.
+						code, pairErr := client.PairPhone(ctx, pairPhone, true, whatsmeow.PairClientChrome, "Chrome (Linux)")
+						if pairErr != nil {
+							logger.Errorf("Failed to request pairing code: %v", pairErr)
+						} else if writeErr := writePairCode(pairCodePath, code); writeErr != nil {
+							logger.Errorf("Failed to write pairing code: %v", writeErr)
+						} else {
+							fmt.Printf("\nPairing code written to %s; enter it in WhatsApp → Linked devices → Link with phone number\n", pairCodePath)
+						}
+						qrCodeShown = true
+					} else if !qrCodeShown {
 						fmt.Println("\nScan this QR code with your WhatsApp app:")
 						qrterminal.GenerateHalfBlock(evt.Code, qrterminal.L, os.Stdout)
 						fmt.Println("\nWaiting for QR code scan...")
 						qrCodeShown = true
 					}
 				} else if evt.Event == "success" {
+					_ = os.Remove(pairCodePath)
 					connected <- true
 					break
 				} else if evt.Event == "timeout" {
